@@ -1,0 +1,59 @@
+Client
+
+The client is evoked with a command line argument giving either the server IP address in dotted decimal notation, or the server domain name. The client has to be able to handle either mode and figure out which of the two is being passed to it. 
+
+If it is given the IP address, it calls the gethostbyaddr function to get the domain name, which it then prints out to the user in the form of an appropriate message (e.g., ‘The server host is compserv1.cs.stonybrook.edu’). The function gethostbyname, on the other hand, returns the IP address that corresponds to a given domain name.
+
+The client then enters an infinite loop in which it queries the user which service is being requested. There are two options : echo and time (note that time is a slightly modified version of the daytime service – see below). 
+
+The client then forks off a child. After the child is forked off, 
+
+the parent process enters a second loop in which it continually reads and prints out status messages received from the child via a half-duplex pipe (see below). 
+
+The parent exits the second loop when the child closes the pipe (how does the parent detect this?), and/or the SIGCHLD signal is generated when the child terminates.
+
+The parent then repeats the outer loop, querying the user again for the (next) service s/he desires. 
+
+This cycle continues till the user responds to a query with quit rather than echo or time.
+
+
+
+The child process is the one which handles the actual service for the user. It execs (see Section 4.7, Chapter 4) an xterm to generate a separate window through which all interactions with server and user take place. 
+
+For example, the following exec function call evokes an xterm, and gets the xterm to execute echocli, located in the current directory, passing the string 127.0.0.1 (assumed to be the IP address of the server) as the command line argument argv[1] to echocli (click on the url for further details) :
+
+execlp("xterm", "xterm", "-e", "./echocli", "127.0.0.1", (char *) 0)
+
+xterm executes one of two client programs (echocli or timecli, say) depending on the service requested. 
+
+A client program establishes a TCP connection to the server at some ephemeral port of your choosing. 
+
+All interaction with the user, on the one hand, and with the server, on the other, takes place through the child’s xterm window, not the parent’s window. 
+
+On the other hand, the child will use a half-duplex pipe to relay status information to the parent which the parent prints out in its window (see below).
+
+To terminate the echo client, the user can type in ^D (CTRL D, the EOF character). 
+
+To terminate the time client, the only option is for the user to type in ^C (CTRL C). (This can also be used as an alternative means of terminating the echo client.) 
+
+Note that using ^C in the context of the time service will give the server process the impression that the client process has ‘crashed’. It is your responsibility to ensure that the server process handles this correctly and closes cleanly. I shall address this further when discussing the server process.
+
+It is also part of your responsibility in this assignment to ensure that the client code is robust with respect to the server process crashing (see Sections 5.12 & 5.13, Chapter 5).
+
+Amongst other implications, this means that it would probably be a good idea for you to implement your echo client code along the lines of either : Figure 6.9, p.168 (or even Figure 6.13, p.174) which uses I/O multiplexing with the select function; or of Figure 26.2, p.680, which uses threads; rather than along the lines of Figure 5.5, p.125.
+
+
+When the child terminates, either normally or abnormally, its xterm window disappears instantaneously. Consequently, any status information that the child might want to communicate to the user should not be printed out on the child’s xterm window, since the user will not have time to see the final such message before the window disappears. Instead, as the parent forks off the child at the beginning, a half-duplex pipe should be established from child to parent. The child uses the pipe to send status reports to the parent, which the parent prints out in its window. I leave it up to you to decide what status information exactly should be relayed to the parent but, at a minimum, the parent should certainly be notified, in as precise terms as possible, of any abnormal termination conditions of the service provided by the child.
+
+
+
+
+In general, you should try to make your code as robust as possible with respect to handling errors, including confused behaviour by the user 
+
+(e.g., passing an invalid command line argument;
+responding to a query incorrectly;
+trying to interact with the service through the parent process window, not the child process xterm; etc.).
+
+Amongst other things, you have to worry about EINTR errors occurring during slow system calls (such as the parent reading from the pipe, or, possibly, printing to stdout, for example) due to a SIGCHLD signal.
+
+What about other kinds of errors? Which ones can occur? How should you handle them?
